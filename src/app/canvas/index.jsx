@@ -1,48 +1,49 @@
 'use client';
 import React, { useRef, useEffect } from 'react';
 import * as THREE from 'three';
-import { Canvas, useThree, useFrame } from '@react-three/fiber';
-import { Center, Environment } from '@react-three/drei';
+import { Canvas, useFrame } from '@react-three/fiber';
+import { Environment } from '@react-three/drei';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader';
 import { Bloom, EffectComposer } from '@react-three/postprocessing';
 
-function Model() {
-  const { scene } = useThree();
-  const modelRef = useRef();
+function Model({ groupRef }) {
   const loader = new OBJLoader();
 
-  useFrame(() => {
-    if (modelRef.current) {
-      modelRef.current.rotation.y += 0.005;
-    }
-  });
-
   useEffect(() => {
-    const modelURL = '/Porcelain_Pose.obj';
+    const modelURL = '/reactlogo.obj';
 
     const material1 = new THREE.MeshStandardMaterial({
       roughness: 0,
       metalness: 0.8,
-      envMapIntensity: 0.75,
+      envMapIntensity: 0.7,
     });
 
     loader.load(modelURL, (object) => {
-      modelRef.current = object;
-
       object.traverse((child) => {
         if (child.isMesh) {
           child.material = material1;
         }
       });
 
-      object.position.y = -100;
-      scene.add(object);
+      const boundingBox = new THREE.Box3().setFromObject(object);
+      const center = new THREE.Vector3();
+      boundingBox.getCenter(center);
+
+      object.position.sub(center);
+
+      if (groupRef.current) {
+        groupRef.current.add(object);
+      }
     });
 
     return () => {
-      if (modelRef.current) scene.remove(modelRef.current);
+      if (groupRef.current) {
+        groupRef.current.children.forEach((child) => {
+          groupRef.current.remove(child);
+        });
+      }
     };
-  }, [scene]);
+  }, [groupRef]);
 
   return null;
 }
@@ -56,30 +57,42 @@ function Lights() {
   );
 }
 
+const SceneGroup = () => {
+  const groupRef = useRef();
+
+  useFrame(() => {
+    if (groupRef.current) {
+      groupRef.current.rotation.y += 0.003;
+    }
+  });
+
+  return (
+    <group ref={groupRef}>
+      <Model groupRef={groupRef} />
+    </group>
+  );
+};
+
 const Index = () => {
   return (
-    <div className='absolute top-0 left-0 w-full h-full z-1'>
+    <div className='absolute top-0 left-0 w-full h-full '>
       <Canvas
-        camera={{ position: [0, 0, -700], fov: 25 }}
+        camera={{ position: [0, 0, -14], fov: 25 }}
         onCreated={({ gl, camera, scene }) => {
           camera.lookAt(scene.position);
           camera.updateMatrixWorld();
+          scene.fog = new THREE.FogExp2(0x202c43, 0.01, 100);
         }}
       >
         <EffectComposer>
+          <Environment files='/ml_gradient_21.hdr' />
           <Lights />
-          <Environment files='/gradient1.hdr' />
-          <Center alignTop={false}>
-            <Model />
-          </Center>
+          <SceneGroup />
           <Bloom
             exposure={1}
-            bloomStrength={2}
+            bloomStrength={1}
             bloomThreshold={0.1}
-            bloomRadius={10}
-            luminanceThreshold={0}
-            luminanceSmoothing={1}
-            intensity={0.1}
+            bloomRadius={100}
           />
         </EffectComposer>
       </Canvas>
